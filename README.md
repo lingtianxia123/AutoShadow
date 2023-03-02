@@ -9,7 +9,7 @@ We propose an automatic shadow generation method, which consists of Hierarchy At
 [[Checkpoints]]()
 
 ## Pipeline
-![image](https://github.com/lingtianxia123/AutoShadow/tree/main/images/framework.png)
+![image](https://github.com/lingtianxia123/AutoShadow/blob/main/images/framework.png)
 
 ## Environment
 

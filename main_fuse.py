@@ -9,7 +9,8 @@ import numpy as np
 import mindspore as ms
 import mindspore.ops as ops
 import mindspore.nn as nn
-from src.IFNet_p import build_model
+from mindvision.engine.callback import LossMonitor
+from src.IFNet import build_model
 from src.HAUNet import HAUNet
 from src.dataset import build_dataset
 
@@ -21,13 +22,13 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 def get_args_parser():
     parser = argparse.ArgumentParser('Set params', add_help=False)
     parser.add_argument('--lr', default=5e-4, type=float)
-    parser.add_argument('--batch_size', default=16, type=int)
+    parser.add_argument('--batch_size', default=8, type=int)
     parser.add_argument('--weight_decay', default=1e-5, type=float)
     parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--clip_max_norm', default=0.0, type=float, help='gradient clipping max norm')
 
     # model
-    parser.add_argument('--model', default='IFNet_p', type=str, help="Name of the model to use")
+    parser.add_argument('--model', default='IFNet', type=str, help="Name of the model to use")
 
     # loss weights
     parser.add_argument('--avg_weight', default=1.0, type=float)
@@ -56,9 +57,9 @@ class WithLossCell(nn.Cell):
         self.network = network
         self.loss_fun = loss_fun
 
-    def construct(self, deshadow_img, fg_instance, pred_mask, shadow_param):
-        pred_param = self.network(deshadow_img, fg_instance, pred_mask)
-        loss = self.loss_fun(pred_param, shadow_param)
+    def construct(self, deshadow_img, fg_instance, pre_mask, shadow_img, shadow_param):
+        fuse_img, pred_param = self.network(deshadow_img, fg_instance, pre_mask)
+        loss = self.loss_fun(fuse_img, pred_param, shadow_img, shadow_param)
         return loss
 
 
@@ -68,10 +69,10 @@ class WithEvalCell(nn.Cell):
         self.network = network
         self.loss_fun = loss_fun
 
-    def construct(self, deshadow_img, fg_instance, pred_mask, shadow_param):
-        pred_param = self.network(deshadow_img, fg_instance, pred_mask)
-        loss = self.loss_fun(pred_param, shadow_param)
-        return pred_param, loss
+    def construct(self, deshadow_img, fg_instance, pre_mask, shadow_img, shadow_param):
+        fuse_img, pred_param = self.network(deshadow_img, fg_instance, pre_mask)
+        loss = self.loss_fun(fuse_img, pred_param, shadow_img, shadow_param)
+        return fuse_img, pred_param, loss
 
 
 class TrainOneStepCell(nn.Cell):
@@ -84,9 +85,9 @@ class TrainOneStepCell(nn.Cell):
         self.grad = ops.GradOperation(get_by_list=True)
         self.args = args
 
-    def construct(self, deshadow_img, fg_instance, pred_mask, shadow_param):
-        loss = self.network(deshadow_img, fg_instance, pred_mask, shadow_param)
-        grads = self.grad(self.network, self.weights)(deshadow_img, fg_instance, pred_mask, shadow_param)
+    def construct(self, deshadow_img, fg_instance, pre_mask, shadow_img, shadow_param):
+        loss = self.network(deshadow_img, fg_instance, pre_mask, shadow_img, shadow_param)
+        grads = self.grad(self.network, self.weights)(deshadow_img, fg_instance, pre_mask, shadow_img, shadow_param)
         if self.args.clip_max_norm > 0:
             grads = ops.clip_by_global_norm(grads, self.args.clip_max_norm)
         self.optimizer(grads)
@@ -139,11 +140,13 @@ def main(args):
         loss_train = 0
         trainOneStep.set_train()
         for data in data_loader_train.create_dict_iterator():
+            shadow_img = data['shadow_img']
             deshadow_img = data['deshadow_img']
             fg_instance = data['fg_instance']
+            fg_shadow = data['fg_shadow']
             shadow_param = data['shadow_param']
-            pred_mask = network_mask(deshadow_img, fg_instance)
-            loss = trainOneStep(deshadow_img, fg_instance, pred_mask, shadow_param)
+            pre_mask = network_mask(deshadow_img, fg_instance)
+            loss = trainOneStep(deshadow_img, fg_instance, pre_mask, shadow_img, shadow_param)
             if step % args.display_freq == 0:
                 print(f"Epoch: [{epoch} / {args.epochs}], "f"step: [{step} / {steps}], " f"loss: {loss}")
             step = step + 1
@@ -153,12 +156,14 @@ def main(args):
         evaluator.clear()
         bos_loss = 0
         for data in data_loader_bos.create_dict_iterator():
+            shadow_img = data['shadow_img']
             deshadow_img = data['deshadow_img']
             fg_instance = data['fg_instance']
+            fg_shadow = data['fg_shadow']
             shadow_param = data['shadow_param']
-            pred_mask = network_mask(deshadow_img, fg_instance)
-            pred_param, loss = evalOneStep(deshadow_img, fg_instance, pred_mask, shadow_param)
-            evaluator.update(pred_param, shadow_param)
+            pre_mask = network_mask(deshadow_img, fg_instance)
+            fuse_img, pred_param, loss = evalOneStep(deshadow_img, fg_instance, pre_mask, shadow_img, shadow_param)
+            evaluator.update(pre_mask, fuse_img, pred_param, fg_shadow, shadow_img, shadow_param)
             bos_loss += loss.asnumpy()
         bos_out = evaluator.eval()
         bos_num = evaluator._samples_num
@@ -166,12 +171,14 @@ def main(args):
         evaluator.clear()
         bosfree_loss = 0
         for data in data_loader_bosfree.create_dict_iterator():
+            shadow_img = data['shadow_img']
             deshadow_img = data['deshadow_img']
             fg_instance = data['fg_instance']
+            fg_shadow = data['fg_shadow']
             shadow_param = data['shadow_param']
-            pred_mask = network_mask(deshadow_img, fg_instance)
-            pred_param, loss = evalOneStep(deshadow_img, fg_instance, pred_mask, shadow_param)
-            evaluator.update(pred_param, shadow_param)
+            pre_mask = network_mask(deshadow_img, fg_instance)
+            fuse_img, pred_param, loss = evalOneStep(deshadow_img, fg_instance, pre_mask, shadow_img, shadow_param)
+            evaluator.update(pre_mask, fuse_img, pred_param, fg_shadow, shadow_img, shadow_param)
             bosfree_loss += loss.asnumpy()
         bosfree_out = evaluator.eval()
         bosfree_num = evaluator._samples_num
@@ -199,7 +206,6 @@ if __name__ == '__main__':
             args.output_dir = args.resume[:-len(args.resume.split('/')[-1]) - 1]
         else:
             args.output_dir = args.output_dir + '/' + str(args.model) + '/' + 'lr_' + str(args.lr) + '_bs_' + str(args.batch_size) + '_epochs_' + str(args.epochs)
-            args.output_dir = args.output_dir + '_' + time.strftime("%Y%m%d-%H%M%S", time.localtime())
             print("output_dir:", args.output_dir)
             os.makedirs(args.output_dir, exist_ok=True)
     main(args)

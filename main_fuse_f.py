@@ -208,7 +208,7 @@ def main(args):
         ms.save_checkpoint(network, os.path.join(args.output_dir, "checkpoint.ckpt"))
         ms.save_checkpoint(optimizer, os.path.join(args.output_dir, "optimizer.ckpt"))
         if args.output_dir:
-            if (epoch + 1) % 50 == 0 or epoch > args.epochs - 10:
+            if (epoch + 1) % 50 == 0 or epoch > args.epochs - 1:
                 ms.save_checkpoint(network, os.path.join(args.output_dir, "checkpoint_%05d.ckpt" % epoch))
 
 if __name__ == '__main__':

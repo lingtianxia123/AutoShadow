@@ -111,7 +111,7 @@ def build_dataset(image_set, args):
     return dataset
 
 if __name__ == '__main__':
-    dataset_generator = DESOBA_Dataset(root='D:/Dataset/ShadowGenerate/DESOBA_fine/train')
+    dataset_generator = DESOBA_Dataset(root='D:/Dataset/ShadowGenerate/DESOBA/train')
     dataset = ds.GeneratorDataset(dataset_generator, column_names=dataset_generator.column_names, shuffle=False)
     img_size = 256
     compose_map_func = (lambda shadow_img, deshadow_img, fg_instance, fg_shadow, shadow_param:

@@ -23,8 +23,6 @@ We propose an automatic shadow generation method, which consists of Hierarchy At
   # Create a new conda environment
   conda create -n shadow python=3.7
   conda activate shadow
-  
-  # Install [MindSpore](https://www.mindspore.cn/en)
     
   # Install other packages
   pip install -r requirements.txt

@@ -28,9 +28,33 @@ We propose an automatic shadow generation method, which consists of Hierarchy At
   pip install -r requirements.txt
   ```
 
-## Environment
+### Dataset
 
-## Dataset
+DESOBA dataset
+
+  - Download the original [DESOBA dataset](https://github.com/bcmi/Object-Shadow-Generation-Dataset-DESOBA). The directory structure should be like:
+
+  ```
+  path_to_DESOBAdataset
+  ├──train 
+    ├──all_deshadoweds
+    ├──bg_instance
+    ├──bg_shadow
+    ├──deshadoweds
+    ├──fg_instace
+    ├──fg_shadow
+    ├──shadoweds
+    ├──SOBA_params
+    └──SOBA_params_am
+  ├──bosfree
+    ├──all_deshadoweds
+    ├──...
+    └──SOBA_params_am
+  └──bos
+    ├──all_deshadoweds
+    ├──...
+    └──SOBA_params_am
+  ```
 
 
 ### Citation
